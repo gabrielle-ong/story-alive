@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
+}
+
+@keyframes kenburns {
+  0% { transform: scale(1) translate(0, 0); }
+  50% { transform: scale(1.05) translate(-1%, -1%); }
+  100% { transform: scale(1) translate(0, 0); }
+}
+
+.animate-kenburns {
+  animation: kenburns 40s ease-in-out infinite alternate;
+}
+
+@keyframes float-particles {
+  0% { transform: translateY(10vh) translateX(0); opacity: 0; }
+  20% { opacity: 0.8; }
+  80% { opacity: 0.6; }
+  100% { transform: translateY(-100vh) translateX(50px); opacity: 0; }
+}
+
+.particle {
+  position: absolute;
+  background: rgba(255, 230, 180, 0.4);
+  border-radius: 50%;
+  animation: float-particles linear infinite;
+}

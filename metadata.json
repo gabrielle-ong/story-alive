@@ -1,0 +1,10 @@
+{
+  "name": "Ghibli Journey",
+  "description": "An endless horizontal scrolling game scenery, dynamically drawn based on your chats and images, inspired by Studio Ghibli art.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

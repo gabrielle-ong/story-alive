@@ -1,0 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Overpass+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #F237A1;
+  --color-secondary: #2C40A7;
+  --color-surface: #FDFCF8; /* slight paper warmth */
+  --color-text: #111827;
+  --font-sans: "Space Grotesk", sans-serif;
+  --font-mono: "Overpass Mono", monospace;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
