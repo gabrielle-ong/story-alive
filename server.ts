@@ -89,7 +89,7 @@ CRITICAL RULE: You MUST call the 'generate_scenery_image' tool after you respond
                       config: {
                         imageConfig: {
                           aspectRatio: "16:9",
-                          imageSize: "1K"
+                          imageSize: "512"
                         }
                       }
                     });

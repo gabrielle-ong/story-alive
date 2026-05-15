@@ -6,7 +6,7 @@ interface SceneryViewerProps {
 
 export function SceneryViewer({ sceneries }: SceneryViewerProps) {
   // Generate random particles for the magical dust/firefly effect
-  const particles = useMemo(() => Array.from({length: 40}).map((_, i) => ({
+  const particles = useMemo(() => Array.from({ length: 40 }).map((_, i) => ({
     id: i,
     left: `${Math.random() * 100}%`,
     top: `${Math.random() * 100}%`,
@@ -21,21 +21,20 @@ export function SceneryViewer({ sceneries }: SceneryViewerProps) {
         // Find the active (top) image and the one just before it (to crossfade from)
         const isActive = index === sceneries.length - 1;
         const isPrevious = index === sceneries.length - 2;
-        
+
         // For performance, only mount/render the top two images
         if (!isActive && !isPrevious && sceneries.length > 1) return null;
 
         return (
-          <img 
-            key={index} 
-            src={src} 
-            alt={`Scenery ${index + 1}`} 
-            className={`absolute inset-0 w-full h-full object-cover animate-kenburns ${
-              isActive ? 'opacity-100 mix-blend-normal' : 'opacity-0 mix-blend-overlay'
-            }`}
-            style={{ 
+          <img
+            key={index}
+            src={src}
+            alt={`Scenery ${index + 1}`}
+            className={`absolute inset-0 w-full h-full object-cover animate-kenburns ${isActive ? 'opacity-100 mix-blend-normal' : 'opacity-0 mix-blend-overlay'
+              }`}
+            style={{
               transition: 'opacity 10s ease-in-out',
-              zIndex: isActive ? 10 : 5 
+              zIndex: isActive ? 10 : 5
             }}
             referrerPolicy="no-referrer"
           />
@@ -51,14 +50,14 @@ export function SceneryViewer({ sceneries }: SceneryViewerProps) {
       {/* Magical Particles Overlay / Surprise Feature */}
       <div className="absolute inset-0 pointer-events-none mix-blend-screen z-30">
         {particles.map(p => (
-           <div 
-             key={p.id} 
-             className="particle shadow-[0_0_8px_2px_rgba(255,230,180,0.6)]" 
-             style={{
-               left: p.left, top: p.top, width: p.size, height: p.size, 
-               animationDuration: p.duration, animationDelay: p.delay
-             }} 
-           />
+          <div
+            key={p.id}
+            className="particle shadow-[0_0_8px_2px_rgba(255,230,180,0.6)]"
+            style={{
+              left: p.left, top: p.top, width: p.size, height: p.size,
+              animationDuration: p.duration, animationDelay: p.delay
+            }}
+          />
         ))}
       </div>
 

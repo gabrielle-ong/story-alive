@@ -9,13 +9,13 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sceneries, setSceneries] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(true);
-  
+
   // Live Session State
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const [isMicActive, setIsMicActive] = useState<boolean>(false);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
-  
+
   const audioPlayerRef = useRef<AudioStreamingPlayer | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
@@ -53,41 +53,41 @@ export default function App() {
           const data = JSON.parse(event.data);
 
           if (data.type === 'audio') {
-             setIsSpeaking(true);
-             player.playAudioChunk(data.audio);
-             setTimeout(()=> setIsSpeaking(false), 500); 
+            setIsSpeaking(true);
+            player.playAudioChunk(data.audio);
+            setTimeout(() => setIsSpeaking(false), 500);
           }
           else if (data.type === 'transcription') {
-             setMessages(prev => {
-                const last = prev[prev.length - 1];
-                const role = data.source === 'user' ? 'user' : 'assistant';
-                const idPrefix = data.source === 'user' ? 'live-user' : 'live-model';
+            setMessages(prev => {
+              const last = prev[prev.length - 1];
+              const role = data.source === 'user' ? 'user' : 'assistant';
+              const idPrefix = data.source === 'user' ? 'live-user' : 'live-model';
 
-                if (last && last.role === role && last.id.startsWith(idPrefix)) {
-                   if (last.isInterrupted) {
-                      return [...prev, { id: idPrefix + '-' + Math.random(), role, text: data.text }];
-                   }
-                   return [...prev.slice(0, -1), { ...last, text: last.text + data.text }];
+              if (last && last.role === role && last.id.startsWith(idPrefix)) {
+                if (last.isInterrupted) {
+                  return [...prev, { id: idPrefix + '-' + Math.random(), role, text: data.text }];
                 }
-                return [...prev, { id: idPrefix + '-' + Math.random(), role, text: data.text }];
-             });
+                return [...prev.slice(0, -1), { ...last, text: last.text + data.text }];
+              }
+              return [...prev, { id: idPrefix + '-' + Math.random(), role, text: data.text }];
+            });
           }
           else if (data.type === 'interrupted') {
-             player.stopAllAndClear();
-             setMessages(prev => {
-                const last = prev[prev.length - 1];
-                if (last && last.role === 'assistant') {
-                   return [...prev.slice(0, -1), { ...last, text: last.text + ' ...', isInterrupted: true }];
-                }
-                return prev;
-             });
+            player.stopAllAndClear();
+            setMessages(prev => {
+              const last = prev[prev.length - 1];
+              if (last && last.role === 'assistant') {
+                return [...prev.slice(0, -1), { ...last, text: last.text + ' ...', isInterrupted: true }];
+              }
+              return prev;
+            });
           }
           else if (data.type === 'illustration') {
-             setSceneries(prev => [...prev, data.imageUrl]);
-             setIsGenerating(false);
+            setSceneries(prev => [...prev, data.imageUrl]);
+            setIsGenerating(false);
           }
           else if (data.type === 'system' && data.message === 'Generating scenery...') {
-             setIsGenerating(true);
+            setIsGenerating(true);
           }
         };
 
@@ -96,7 +96,7 @@ export default function App() {
         setIsGenerating(false);
       }
     };
-    
+
     initWorld();
 
     return () => {
@@ -114,44 +114,44 @@ export default function App() {
   };
 
   const startMic = async () => {
-     try {
-       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-       mediaStreamRef.current = stream;
-       
-       const audioCtx = new AudioContext({ sampleRate: 16000 });
-       audioCtxRef.current = audioCtx;
-       
-       const source = audioCtx.createMediaStreamSource(stream);
-       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-       scriptProcessorRef.current = processor;
-       
-       source.connect(processor);
-       processor.connect(audioCtx.destination);
-       
-       processor.onaudioprocess = (e) => {
-         if (socketRef.current?.readyState === WebSocket.OPEN) {
-             const base64 = pcmToBase64(e.inputBuffer.getChannelData(0));
-             socketRef.current.send(JSON.stringify({ audio: base64 }));
-         }
-       };
-       setIsMicActive(true);
-     } catch(err) {
-       console.error("Microphone access denied", err);
-       alert("Microphone access is required for voice chat.");
-     }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
+      const audioCtx = new AudioContext({ sampleRate: 16000 });
+      audioCtxRef.current = audioCtx;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      scriptProcessorRef.current = processor;
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+
+      processor.onaudioprocess = (e) => {
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+          const base64 = pcmToBase64(e.inputBuffer.getChannelData(0));
+          socketRef.current.send(JSON.stringify({ audio: base64 }));
+        }
+      };
+      setIsMicActive(true);
+    } catch (err) {
+      console.error("Microphone access denied", err);
+      alert("Microphone access is required for voice chat.");
+    }
   };
 
   const stopMic = () => {
-     if (scriptProcessorRef.current) {
-        scriptProcessorRef.current.disconnect();
-     }
-     if (audioCtxRef.current) {
-        audioCtxRef.current.close().catch(()=>{});
-     }
-     if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(t => t.stop());
-     }
-     setIsMicActive(false);
+    if (scriptProcessorRef.current) {
+      scriptProcessorRef.current.disconnect();
+    }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => { });
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop());
+    }
+    setIsMicActive(false);
   };
 
   const handleSendMessage = async (text: string, file?: File) => {
@@ -163,7 +163,7 @@ export default function App() {
     };
 
     let base64Image: string | undefined;
-    
+
     if (file) {
       try {
         base64Image = await fileToBase64(file);
@@ -188,14 +188,14 @@ export default function App() {
   };
 
   return (
-    <div className="relative flex h-screen w-screen overflow-hidden bg-stone-900 font-sans">
-      <div className="absolute inset-0">
+    <div className="flex h-screen w-screen overflow-hidden bg-stone-900 font-sans">
+      <div className="flex-1 relative">
         <SceneryViewer sceneries={sceneries} />
       </div>
-      <div className="absolute right-0 top-0 bottom-0 z-10 w-96">
-        <ChatSidebar 
-          messages={messages} 
-          onSendMessage={handleSendMessage} 
+      <div className="w-96 border-l border-white/10 flex-shrink-0 relative z-10">
+        <ChatSidebar
+          messages={messages}
+          onSendMessage={handleSendMessage}
           isGenerating={isGenerating}
           isMicActive={isMicActive}
           onToggleMic={toggleMic}
