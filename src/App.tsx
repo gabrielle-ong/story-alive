@@ -60,13 +60,16 @@ export default function App() {
           else if (data.type === 'transcription') {
              setMessages(prev => {
                 const last = prev[prev.length - 1];
-                if (last && last.role === 'assistant' && last.id.startsWith('live-model')) {
+                const role = data.source === 'user' ? 'user' : 'assistant';
+                const idPrefix = data.source === 'user' ? 'live-user' : 'live-model';
+
+                if (last && last.role === role && last.id.startsWith(idPrefix)) {
                    if (last.isInterrupted) {
-                      return [...prev, { id: 'live-model-' + Math.random(), role: 'assistant', text: data.text }];
+                      return [...prev, { id: idPrefix + '-' + Math.random(), role, text: data.text }];
                    }
                    return [...prev.slice(0, -1), { ...last, text: last.text + data.text }];
                 }
-                return [...prev, { id: 'live-model-' + Math.random(), role: 'assistant', text: data.text }];
+                return [...prev, { id: idPrefix + '-' + Math.random(), role, text: data.text }];
              });
           }
           else if (data.type === 'interrupted') {

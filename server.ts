@@ -50,9 +50,20 @@ CRITICAL RULE: You MUST call the 'generate_scenery_image' tool after you respond
             if (message.serverContent?.interrupted) {
               clientWs.send(JSON.stringify({ type: 'interrupted', interrupted: true }));
             }
-            // Forward transcription
+            // Forward transcriptions based on input/output transcription config
+            const inputTranscription = (message.serverContent as any)?.inputTranscription;
+            if (inputTranscription?.text) {
+               clientWs.send(JSON.stringify({ type: 'transcription', source: 'user', text: inputTranscription.text }));
+            }
+
+            const outputTranscription = (message.serverContent as any)?.outputTranscription;
+            if (outputTranscription?.text) {
+               clientWs.send(JSON.stringify({ type: 'transcription', source: 'model', text: outputTranscription.text }));
+            }
+
+            // Fallback for model text if outputTranscription is not used
             const modelTurnParts = message.serverContent?.modelTurn?.parts;
-            if (modelTurnParts) {
+            if (modelTurnParts && !outputTranscription?.text) {
               const textParts = modelTurnParts.filter((p: any) => !!p.text);
               if (textParts.length > 0) {
                  const fullText = textParts.map((p: any) => p.text).join("");
