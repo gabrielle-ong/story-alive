@@ -1,59 +1,172 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SceneryViewer } from './components/SceneryViewer';
 import { ChatSidebar } from './components/ChatSidebar';
-import { processUserMessage, generateSceneryImage, ChatMessage, fileToBase64 } from './services/aiService';
+import { ChatMessage, fileToBase64, generateSceneryImage } from './services/aiService';
+import { AudioStreamingPlayer } from './lib/AudioStreamingPlayer';
+import { pcmToBase64 } from './lib/audioUtils';
 
 export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sceneries, setSceneries] = useState<string[]>([]);
-  const [isGenerating, setIsGenerating] = useState(true); // initially true for the first generated scenery
+  const [isGenerating, setIsGenerating] = useState(true);
+  
+  // Live Session State
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const [isMicActive, setIsMicActive] = useState<boolean>(false);
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  
+  const audioPlayerRef = useRef<AudioStreamingPlayer | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
-  // Initial prompt kick off
+  // Initial prompt kick off & connect to live API
   useEffect(() => {
+    let ws: WebSocket;
     const initWorld = async () => {
       try {
         const welcomeMessage: ChatMessage = {
           id: 'welcome',
           role: 'assistant',
-          text: 'The canvas is ready. I cannot generate direct GIF videos yet, but I have brought the scenery to life with cinematic camera pans and a magical particle system! Try tapping a quick-action button below or send your own idea!',
+          text: 'The canvas is ready. I am listening! Try speaking using the microphone, or type a prompt.',
         };
         setMessages([welcomeMessage]);
-        
-        // Generate the very first scenery
+
+        // Generate the very first scenery directly (to keep original behavior)
         const initialPrompt = 'A beautiful, peaceful studio ghibli style anime landscape, a pristine blank canvas of rolling green hills, awaiting new creations, bright blue sky, masterpiece, highly detailed.';
         const initialImageUrl = await generateSceneryImage(initialPrompt);
         setSceneries([initialImageUrl]);
+        setIsGenerating(false);
+
+        // Connect WebSocket
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/live`;
+        ws = new WebSocket(wsUrl);
+        setSocket(ws);
+        socketRef.current = ws;
+
+        const player = new AudioStreamingPlayer(24000);
+        audioPlayerRef.current = player;
+
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.type === 'audio') {
+             setIsSpeaking(true);
+             player.playAudioChunk(data.audio);
+             setTimeout(()=> setIsSpeaking(false), 500); 
+          }
+          else if (data.type === 'transcription') {
+             setMessages(prev => {
+                const last = prev[prev.length - 1];
+                if (last && last.role === 'assistant' && last.id.startsWith('live-model')) {
+                   if (last.isInterrupted) {
+                      return [...prev, { id: 'live-model-' + Math.random(), role: 'assistant', text: data.text }];
+                   }
+                   return [...prev.slice(0, -1), { ...last, text: last.text + data.text }];
+                }
+                return [...prev, { id: 'live-model-' + Math.random(), role: 'assistant', text: data.text }];
+             });
+          }
+          else if (data.type === 'interrupted') {
+             player.stopAllAndClear();
+             setMessages(prev => {
+                const last = prev[prev.length - 1];
+                if (last && last.role === 'assistant') {
+                   return [...prev.slice(0, -1), { ...last, text: last.text + ' ...', isInterrupted: true }];
+                }
+                return prev;
+             });
+          }
+          else if (data.type === 'illustration') {
+             setSceneries(prev => [...prev, data.imageUrl]);
+             setIsGenerating(false);
+          }
+          else if (data.type === 'system' && data.message === 'Generating scenery...') {
+             setIsGenerating(true);
+          }
+        };
+
       } catch (err: any) {
         console.error("Failed to initialize world", err);
-        const errorMessage = err?.message || 'Unknown error occurred.';
-        setMessages(prev => [...prev, {
-          id: 'error-init',
-          role: 'assistant',
-          text: `Hmm, I seem to be having trouble drawing our starting location. (Error: ${errorMessage})`
-        }]);
-      } finally {
         setIsGenerating(false);
       }
     };
     
     initWorld();
+
+    return () => {
+      ws?.close();
+      audioPlayerRef.current?.close();
+    }
   }, []);
 
+  const toggleMic = async () => {
+    if (isMicActive) {
+      stopMic();
+    } else {
+      await startMic();
+    }
+  };
+
+  const startMic = async () => {
+     try {
+       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+       mediaStreamRef.current = stream;
+       
+       const audioCtx = new AudioContext({ sampleRate: 16000 });
+       audioCtxRef.current = audioCtx;
+       
+       const source = audioCtx.createMediaStreamSource(stream);
+       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+       scriptProcessorRef.current = processor;
+       
+       source.connect(processor);
+       processor.connect(audioCtx.destination);
+       
+       processor.onaudioprocess = (e) => {
+         if (socketRef.current?.readyState === WebSocket.OPEN) {
+             const base64 = pcmToBase64(e.inputBuffer.getChannelData(0));
+             socketRef.current.send(JSON.stringify({ audio: base64 }));
+         }
+       };
+       setIsMicActive(true);
+     } catch(err) {
+       console.error("Microphone access denied", err);
+       alert("Microphone access is required for voice chat.");
+     }
+  };
+
+  const stopMic = () => {
+     if (scriptProcessorRef.current) {
+        scriptProcessorRef.current.disconnect();
+     }
+     if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(()=>{});
+     }
+     if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(t => t.stop());
+     }
+     setIsMicActive(false);
+  };
+
   const handleSendMessage = async (text: string, file?: File) => {
-    // Optimistically add user message
     const userMsgId = Date.now().toString();
     const newUserMsg: ChatMessage = {
       id: userMsgId,
       role: 'user',
       text,
     };
+
+    let base64Image: string | undefined;
     
     if (file) {
       try {
-        const base64 = await fileToBase64(file);
+        base64Image = await fileToBase64(file);
         newUserMsg.imageData = {
           mimeType: file.type,
-          data: base64.split(',')[1]
+          data: base64Image.split(',')[1]
         };
       } catch (err) {
         console.error("Failed to read file", err);
@@ -61,36 +174,13 @@ export default function App() {
     }
 
     setMessages(prev => [...prev, newUserMsg]);
-    setIsGenerating(true);
 
-    try {
-      // 1. Get Assistant reply and the prompt for the next scenery
-      const aiResponse = await processUserMessage(messages, text, file);
-      
-      const assistantMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        text: aiResponse.assistantReply
-      };
-      
-      // We can show the assistant reply early while image is generating
-      setMessages(prev => [...prev, assistantMsg]);
-
-      // 2. Generate the background based on the prompt
-      console.log("Generating background with prompt:", aiResponse.backgroundPrompt);
-      const newImageUrl = await generateSceneryImage(aiResponse.backgroundPrompt);
-      
-      setSceneries(prev => [...prev, newImageUrl]);
-    } catch (err: any) {
-      console.error("Interaction failed", err);
-      const errorMessage = err?.message || 'Unknown error occurred.';
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 2).toString(),
-        role: 'assistant',
-        text: `Uh oh, the magic faded for a moment. Error: ${errorMessage}. Try telling me that again?`
-      }]);
-    } finally {
-      setIsGenerating(false);
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      if (base64Image) {
+        socketRef.current.send(JSON.stringify({ image: base64Image, imageText: text }));
+      } else if (text) {
+        socketRef.current.send(JSON.stringify({ text }));
+      }
     }
   };
 
@@ -103,7 +193,10 @@ export default function App() {
         <ChatSidebar 
           messages={messages} 
           onSendMessage={handleSendMessage} 
-          isGenerating={isGenerating} 
+          isGenerating={isGenerating}
+          isMicActive={isMicActive}
+          onToggleMic={toggleMic}
+          isSpeaking={isSpeaking}
         />
       </div>
     </div>

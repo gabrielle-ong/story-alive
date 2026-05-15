@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Image as ImageIcon, Loader2, Maximize2, Minimize2, Camera, X } from 'lucide-react';
+import { Send, Image as ImageIcon, Loader2, Maximize2, Minimize2, Camera, X, Mic } from 'lucide-react';
 import type { ChatMessage } from '../services/aiService';
 
 interface ChatSidebarProps {
   messages: ChatMessage[];
   onSendMessage: (text: string, file?: File) => void;
   isGenerating: boolean;
+  isMicActive: boolean;
+  onToggleMic: () => void;
+  isSpeaking: boolean;
 }
 
 const QUICK_PROMPTS = [
@@ -17,7 +20,7 @@ const QUICK_PROMPTS = [
   { icon: '✨', label: 'Magic' },
 ];
 
-export function ChatSidebar({ messages, onSendMessage, isGenerating }: ChatSidebarProps) {
+export function ChatSidebar({ messages, onSendMessage, isGenerating, isMicActive, onToggleMic, isSpeaking }: ChatSidebarProps) {
   const [inputText, setInputText] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -139,12 +142,15 @@ export function ChatSidebar({ messages, onSendMessage, isGenerating }: ChatSideb
                 {msg.role === 'user' ? 'You' : 'Canvas AI'}
               </span>
               <div 
-                className={`max-w-[85%] rounded-2xl p-3 shadow-md backdrop-blur-md border border-white/10 ${
+                className={`max-w-[85%] rounded-2xl p-3 shadow-md backdrop-blur-md border border-white/10 relative ${
                   msg.role === 'user' 
                     ? 'bg-white/20 rounded-tr-sm text-white' 
                     : 'bg-black/30 rounded-tl-sm text-white/90'
-                }`}
+                } ${msg.isInterrupted ? 'opacity-70 border-dashed border-white/30' : ''}`}
               >
+                {msg.isInterrupted && msg.role === 'assistant' && (
+                  <span className="absolute -top-5 right-0 text-[10px] font-mono font-bold text-amber-500 mb-1 uppercase tracking-wider">Interrupted</span>
+                )}
                 {msg.imageData && (
                   <img 
                     src={`data:${msg.imageData.mimeType};base64,${msg.imageData.data}`} 
@@ -252,6 +258,14 @@ export function ChatSidebar({ messages, onSendMessage, isGenerating }: ChatSideb
             title="Upload Image"
           >
             <ImageIcon className="w-5 h-5 drop-shadow-sm" />
+          </button>
+          <button 
+            onClick={onToggleMic}
+            className={`p-2 transition-colors rounded-lg shadow-sm ${isMicActive ? 'bg-amber-500 text-white animate-pulse' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+            disabled={isGenerating}
+            title={isMicActive ? "Stop Mic" : "Start Mic"}
+          >
+            <Mic className="w-5 h-5 drop-shadow-sm" />
           </button>
           <button 
             onClick={startCamera}
