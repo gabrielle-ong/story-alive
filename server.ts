@@ -28,10 +28,10 @@ async function startServer() {
   wss.on("connection", async (clientWs: WebSocket, req) => {
     console.log("Starting Live session");
 
-    const systemInstructionText = `You are an AI visual co-creator generating an evolving, expressive landscape (inspired by Studio Ghibli anime art). 
+    const systemInstructionText = `You are a cinematic storyteller generating an evolving, expressive landscape (inspired by Studio Ghibli anime art). 
 The user is adding elements, vibes, or themes to this world via voice and text.
-Keep your vocal replies VERY BRIEF, punchy (1-2 sentences). Acknowledge the addition, and optionally ask ONE short, inspiring question to prompt their next idea. Do not act as a roleplaying guide, just a creative partner.
-CRITICAL RULE: You MUST call the 'generate_scenery_image' tool after you respond to the user to visually render the current scene context. The image prompt must remain in the beautiful Studio Ghibli background art style.`;
+Keep your vocal replies VERY BRIEF and poetic (1-2 sentences max). Instead of constantly asking what the user wants next, simply weave their requested elements into a continuous, magical narrative about the unfolding scene. Let the story naturally guide the visuals.
+CRITICAL RULE: EVERY SINGLE TIME the user speaks or adds an element, you MUST call the 'generate_scenery_image' tool to visually render the new scene. DO NOT skip this. You must generate a new image prompt for every user turn.`;
 
     let session: any = null;
     let isConnected = false;
@@ -80,27 +80,8 @@ CRITICAL RULE: You MUST call the 'generate_scenery_image' tool after you respond
                   console.log("Generating illustration for prompt:", args.prompt);
                   clientWs.send(JSON.stringify({ type: 'system', message: 'Generating scenery...' }));
 
+                  // Immediate non-blocking response back to Live model
                   try {
-                    // Call image generation model
-                    const prompt = `A beautiful, peaceful studio ghibli style anime landscape. ${args.prompt}. Masterpiece, highly detailed.`;
-                    const imgResponse = await ai.models.generateContent({
-                      model: 'gemini-3.1-flash-image-preview',
-                      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                      config: {
-                        imageConfig: {
-                          aspectRatio: "16:9",
-                          imageSize: "512"
-                        }
-                      }
-                    });
-
-                    const base64Bytes = imgResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-                    if (base64Bytes) {
-                      const imageUrl = `data:image/jpeg;base64,${base64Bytes}`;
-                      clientWs.send(JSON.stringify({ type: 'illustration', imageUrl }));
-                    }
-
-                    // Send successful response back to Live model
                     await session.sendToolResponse({
                       functionResponses: [
                         {
@@ -110,20 +91,33 @@ CRITICAL RULE: You MUST call the 'generate_scenery_image' tool after you respond
                         }
                       ]
                     });
-
                   } catch (e) {
-                    console.error("Failed to generate image:", e);
-                    // Inform the model of the failure
-                    await session.sendToolResponse({
-                      functionResponses: [
-                        {
-                          id: call.id,
-                          name: call.name,
-                          response: { success: false, error: String(e) }
-                        }
-                      ]
-                    });
+                     console.error("Failed to send immediate tool response:", e);
                   }
+
+                  // Async generation in the background
+                  (async () => {
+                    try {
+                      const prompt = `A beautiful, peaceful studio ghibli style anime landscape. ${args.prompt}. Masterpiece, highly detailed.`;
+                      const imgResponse = await ai.models.generateContent({
+                        model: 'gemini-3.1-flash-image-preview',
+                        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                        config: {
+                          imageConfig: {
+                            aspectRatio: "16:9"
+                          }
+                        }
+                      });
+
+                      const base64Bytes = imgResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+                      if (base64Bytes) {
+                        const imageUrl = `data:image/jpeg;base64,${base64Bytes}`;
+                        clientWs.send(JSON.stringify({ type: 'illustration', imageUrl }));
+                      }
+                    } catch (e) {
+                      console.error("Failed to generate image asynchronously:", e);
+                    }
+                  })();
                 }
               }
             }

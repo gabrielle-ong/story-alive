@@ -104,8 +104,7 @@ export async function generateSceneryImage(prompt: string): Promise<string> {
     },
     config: {
       imageConfig: {
-        aspectRatio: "16:9",
-        imageSize: "512"
+        aspectRatio: "16:9"
       }
     }
   });
