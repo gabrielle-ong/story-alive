@@ -33,13 +33,7 @@ export default function App() {
         };
         setMessages([welcomeMessage]);
 
-        // Generate the very first scenery directly (to keep original behavior)
-        const initialPrompt = 'A beautiful, peaceful studio ghibli style anime landscape, a pristine blank canvas of rolling green hills, awaiting new creations, bright blue sky, masterpiece, highly detailed.';
-        const initialImageUrl = await generateSceneryImage(initialPrompt);
-        setSceneries([initialImageUrl]);
-        setIsGenerating(false);
-
-        // Connect WebSocket
+        // Connect WebSocket immediately so Live API can respond
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/live`;
         ws = new WebSocket(wsUrl);
@@ -48,6 +42,19 @@ export default function App() {
 
         const player = new AudioStreamingPlayer(24000);
         audioPlayerRef.current = player;
+
+        // Generate the very first scenery asynchronously without blocking the connection
+        const initialPrompt = 'A beautiful, peaceful studio ghibli style anime landscape, a pristine blank canvas of rolling green hills, awaiting new creations, bright blue sky, masterpiece, highly detailed.';
+        const start = Date.now();
+        generateSceneryImage(initialPrompt).then((initialImageUrl) => {
+          setSceneries([initialImageUrl]);
+          const lat = ((Date.now() - start) / 1000).toFixed(1);
+          setMessages(prev => [...prev, { id: 'latency-init', role: 'assistant', text: `⏱️ *Image generated in ${lat}s*` }]);
+          setIsGenerating(false);
+        }).catch((err) => {
+          console.error("Initial image generation failed", err);
+          setIsGenerating(false);
+        });
 
         ws.onmessage = (event) => {
           const data = JSON.parse(event.data);
@@ -84,6 +91,9 @@ export default function App() {
           }
           else if (data.type === 'illustration') {
             setSceneries(prev => [...prev, data.imageUrl]);
+            if (data.latency) {
+              setMessages(prev => [...prev, { id: 'latency-' + Math.random(), role: 'assistant', text: `⏱️ *Image generated in ${data.latency}s*` }]);
+            }
             setIsGenerating(false);
           }
           else if (data.type === 'system' && data.message === 'Generating scenery...') {

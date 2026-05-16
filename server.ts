@@ -98,6 +98,7 @@ CRITICAL RULE: EVERY SINGLE TIME the user speaks or adds an element, you MUST ca
                   // Async generation in the background
                   (async () => {
                     try {
+                      const startTime = Date.now();
                       const prompt = `A beautiful, peaceful studio ghibli style anime landscape. ${args.prompt}. Masterpiece, highly detailed.`;
                       const imgResponse = await ai.models.generateContent({
                         model: 'gemini-3.1-flash-image-preview',
@@ -111,8 +112,9 @@ CRITICAL RULE: EVERY SINGLE TIME the user speaks or adds an element, you MUST ca
 
                       const base64Bytes = imgResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
                       if (base64Bytes) {
+                        const latency = ((Date.now() - startTime) / 1000).toFixed(1);
                         const imageUrl = `data:image/jpeg;base64,${base64Bytes}`;
-                        clientWs.send(JSON.stringify({ type: 'illustration', imageUrl }));
+                        clientWs.send(JSON.stringify({ type: 'illustration', imageUrl, latency }));
                       }
                     } catch (e) {
                       console.error("Failed to generate image asynchronously:", e);
