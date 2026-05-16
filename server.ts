@@ -142,18 +142,19 @@ function handleClientMessage(data: any, session: any) {
     }
     if (msg.image) {
       const base64Data = msg.image.replace(/^data:image\/\w+;base64,/, "");
-      session.sendClientContent({
-        turns: [
-          {
-            role: "user",
-            parts: [
-              { text: msg.imageText || "I've uploaded an image. Please incorporate its core visual themes or any characters into our Ghibli scenery." },
-              { inlineData: { data: base64Data, mimeType: 'image/jpeg' } }
-            ]
-          }
-        ],
-        turnComplete: true
+      
+      // Stream the image as a "video" frame to the Live API
+      session.sendRealtimeInput({
+        video: {
+          data: base64Data,
+          mimeType: 'image/jpeg'
+        }
       });
+
+      // Stream the accompanying text and yield the floor
+      const textToSend = msg.imageText || "I've uploaded an image. Please incorporate its core visual themes or any characters into our Ghibli scenery.";
+      session.sendRealtimeInput({ text: textToSend });
+      session.sendClientContent({ turnComplete: true });
     }
   } catch (e) {
     console.error("Error processing client message", e);
