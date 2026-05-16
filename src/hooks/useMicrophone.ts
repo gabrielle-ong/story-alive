@@ -4,7 +4,7 @@ import { pcmToBase64 } from '../lib/audioUtils';
 export function useMicrophone(sendMessage: (msg: any) => void) {
   const [isMicActive, setIsMicActive] = useState<boolean>(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   
   const sendMessageRef = useRef(sendMessage);
@@ -20,15 +20,18 @@ export function useMicrophone(sendMessage: (msg: any) => void) {
       const audioCtx = new AudioContext({ sampleRate: 16000 });
       audioCtxRef.current = audioCtx;
 
+      await audioCtx.audioWorklet.addModule('/audio-processor.js');
+
       const source = audioCtx.createMediaStreamSource(stream);
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-      scriptProcessorRef.current = processor;
+      const workletNode = new AudioWorkletNode(audioCtx, 'audio-recorder-processor');
+      workletNodeRef.current = workletNode;
 
-      source.connect(processor);
-      processor.connect(audioCtx.destination);
+      source.connect(workletNode);
+      // We intentionally do not connect the worklet to audioCtx.destination to avoid mic feedback!
 
-      processor.onaudioprocess = (e) => {
-        const base64 = pcmToBase64(e.inputBuffer.getChannelData(0));
+      workletNode.port.onmessage = (e) => {
+        const float32Data = e.data;
+        const base64 = pcmToBase64(float32Data);
         sendMessageRef.current({ audio: base64 });
       };
       
@@ -39,7 +42,7 @@ export function useMicrophone(sendMessage: (msg: any) => void) {
   };
 
   const stopMic = () => {
-    if (scriptProcessorRef.current) scriptProcessorRef.current.disconnect();
+    if (workletNodeRef.current) workletNodeRef.current.disconnect();
     if (audioCtxRef.current) audioCtxRef.current.close().catch(() => { });
     if (mediaStreamRef.current) mediaStreamRef.current.getTracks().forEach(t => t.stop());
     setIsMicActive(false);
