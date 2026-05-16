@@ -35,7 +35,7 @@ export function useStoryteller() {
         const player = new AudioStreamingPlayer(24000);
         audioPlayerRef.current = player;
 
-        const initialPrompt = 'A pristine blank canvas of rolling green hills. Bright blue sky. Studio Ghibli style anime landscape. Masterpiece. Highly detailed';
+        const initialPrompt = 'A pristine blank canvas of rolling green hills. Bright blue sky.';
         const start = Date.now();
         fetch('/api/initial-scene', {
           method: 'POST',

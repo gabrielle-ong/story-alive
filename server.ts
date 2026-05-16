@@ -18,6 +18,29 @@ const ai = new GoogleGenAI({
   }
 });
 
+async function generateScenery(prompt: string) {
+  const startTime = Date.now();
+  const enhancedPrompt = `A beautiful, peaceful studio ghibli style anime landscape. ${prompt}. Masterpiece, highly detailed.`;
+  const imgResponse = await ai.models.generateContent({
+    model: 'gemini-3.1-flash-image-preview',
+    contents: [{ role: 'user', parts: [{ text: enhancedPrompt }] }],
+    config: {
+      imageConfig: { aspectRatio: "16:9", imageSize: "512", numberOfImages: 1 }
+    }
+  });
+
+  const inlineData = imgResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+  const base64Bytes = inlineData?.data;
+  if (!base64Bytes) throw new Error("No image generated");
+
+  const mimeType = inlineData?.mimeType || 'image/jpeg';
+  const latency = ((Date.now() - startTime) / 1000).toFixed(1);
+  return {
+    imageUrl: `data:${mimeType};base64,${base64Bytes}`,
+    latency
+  };
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -113,28 +136,8 @@ Your very first response must initialize the story.
                   // Async generation in the background
                   (async () => {
                     try {
-                      const startTime = Date.now();
-                      const prompt = `A beautiful, peaceful studio ghibli style anime landscape. ${args.prompt}. Masterpiece, highly detailed.`;
-                      const imgResponse = await ai.models.generateContent({
-                        model: 'gemini-3.1-flash-image-preview',
-                        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                        config: {
-                          imageConfig: {
-                            aspectRatio: "16:9",
-                            imageSize: "512",
-                            numberOfImages: 1
-                          }
-                        }
-                      });
-
-                      const inlineData = imgResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-                      const base64Bytes = inlineData?.data;
-                      if (base64Bytes) {
-                        const mimeType = inlineData?.mimeType || 'image/jpeg';
-                        const latency = ((Date.now() - startTime) / 1000).toFixed(1);
-                        const imageUrl = `data:${mimeType};base64,${base64Bytes}`;
-                        clientWs.send(JSON.stringify({ type: 'illustration', imageUrl, latency }));
-                      }
+                      const { imageUrl, latency } = await generateScenery(args.prompt);
+                      clientWs.send(JSON.stringify({ type: 'illustration', imageUrl, latency }));
                     } catch (e) {
                       console.error("Failed to generate image asynchronously:", e);
                     }
@@ -227,24 +230,8 @@ Your very first response must initialize the story.
   app.post('/api/initial-scene', async (req, res) => {
     try {
       const { prompt } = req.body;
-      const startTime = Date.now();
-      const imgResponse = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-image-preview',
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: {
-          imageConfig: { aspectRatio: "16:9", imageSize: "512", numberOfImages: 1 }
-        }
-      });
-      const inlineData = imgResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-      const base64Bytes = inlineData?.data;
-      if (base64Bytes) {
-        const mimeType = inlineData?.mimeType || 'image/jpeg';
-        const latency = ((Date.now() - startTime) / 1000).toFixed(1);
-        const imageUrl = `data:${mimeType};base64,${base64Bytes}`;
-        res.json({ imageUrl, latency });
-      } else {
-        res.status(500).json({ error: "No image generated" });
-      }
+      const { imageUrl, latency } = await generateScenery(prompt);
+      res.json({ imageUrl, latency });
     } catch (e: any) {
       console.error(e);
       res.status(500).json({ error: e.message });
