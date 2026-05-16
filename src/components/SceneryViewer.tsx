@@ -43,7 +43,7 @@ export function SceneryViewer({ sceneries }: SceneryViewerProps) {
 
       {sceneries.length === 0 && (
         <div className="absolute inset-0 z-20 flex items-center justify-center w-full h-full text-white/50 font-serif text-2xl drop-shadow-md">
-          Waking up the game world...
+          Waking up the story world...
         </div>
       )}
 

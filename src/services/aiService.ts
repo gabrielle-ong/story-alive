@@ -53,7 +53,7 @@ Based on the conversation history and the user's latest message (and optionally 
    - The scenery prompt MUST remain in the beautiful Studio Ghibli background art style.
    - It MUST immediately feature the elements, themes, or colors the user requested.
    - IMPORTANT: If the user uploads a photo of a HUMAN, embed them as an anime character in the scenery! Translate their appearance (clothing, hair, pose) into the Studio Ghibli style alongside the environment.
-   - The prompt should be highly descriptive (e.g., lighting, weather, key objects).
+   - The prompt should be concise (less than 50 words) yet descriptive (e.g., lighting, weather, key objects).
 
 Latest User Message: ${newMessage}
 ${imageFile ? "(User also attached an image. Please look at the image and incorporate its core visual themes, objects, colors, or any humans into the beautiful anime scenery.)" : ""}
@@ -102,7 +102,9 @@ export async function generateSceneryImage(prompt: string): Promise<string> {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     config: {
       imageConfig: {
-        aspectRatio: "16:9"
+        aspectRatio: "16:9",
+        imageSize: "512",
+        numberOfImages: 1
       }
     }
   });

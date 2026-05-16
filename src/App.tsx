@@ -44,7 +44,7 @@ export default function App() {
         audioPlayerRef.current = player;
 
         // Generate the very first scenery asynchronously without blocking the connection
-        const initialPrompt = 'A beautiful, peaceful studio ghibli style anime landscape, a pristine blank canvas of rolling green hills, awaiting new creations, bright blue sky, masterpiece, highly detailed.';
+        const initialPrompt = 'A pristine blank canvas of rolling green hills. Bright blue sky. Studio Ghibli style anime landscape. Masterpiece. Highly detailed';
         const start = Date.now();
         generateSceneryImage(initialPrompt).then((initialImageUrl) => {
           setSceneries([initialImageUrl]);
