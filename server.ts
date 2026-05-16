@@ -211,6 +211,33 @@ CRITICAL RULE: If the user interrupts you, stop your current narrative, adapt to
 
   app.use(express.json({ limit: '50mb' }));
 
+  app.post('/api/initial-scene', async (req, res) => {
+    try {
+      const { prompt } = req.body;
+      const startTime = Date.now();
+      const imgResponse = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-image-preview',
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: {
+          imageConfig: { aspectRatio: "16:9", imageSize: "512", numberOfImages: 1 }
+        }
+      });
+      const inlineData = imgResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+      const base64Bytes = inlineData?.data;
+      if (base64Bytes) {
+        const mimeType = inlineData?.mimeType || 'image/jpeg';
+        const latency = ((Date.now() - startTime) / 1000).toFixed(1);
+        const imageUrl = `data:${mimeType};base64,${base64Bytes}`;
+        res.json({ imageUrl, latency });
+      } else {
+        res.status(500).json({ error: "No image generated" });
+      }
+    } catch (e: any) {
+      console.error(e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

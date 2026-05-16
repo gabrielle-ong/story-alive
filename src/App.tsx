@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { SceneryViewer } from './components/SceneryViewer';
 import { ChatSidebar } from './components/ChatSidebar';
-import { ChatMessage, fileToBase64, generateSceneryImage } from './services/aiService';
+import { ChatMessage } from './types/chat';
+import { fileToBase64 } from './lib/fileUtils';
 import { AudioStreamingPlayer } from './lib/AudioStreamingPlayer';
 import { pcmToBase64 } from './lib/audioUtils';
 
@@ -46,15 +47,23 @@ export default function App() {
         // Generate the very first scenery asynchronously without blocking the connection
         const initialPrompt = 'A pristine blank canvas of rolling green hills. Bright blue sky. Studio Ghibli style anime landscape. Masterpiece. Highly detailed';
         const start = Date.now();
-        generateSceneryImage(initialPrompt).then((initialImageUrl) => {
-          setSceneries([initialImageUrl]);
-          const lat = ((Date.now() - start) / 1000).toFixed(1);
-          setMessages(prev => [...prev, { id: 'latency-init', role: 'assistant', text: `⏱️ *Image generated in ${lat}s*` }]);
-          setIsGenerating(false);
-        }).catch((err) => {
-          console.error("Initial image generation failed", err);
-          setIsGenerating(false);
-        });
+        fetch('/api/initial-scene', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: initialPrompt })
+        })
+          .then(res => res.json())
+          .then((data) => {
+            if (data.imageUrl) {
+              setSceneries([data.imageUrl]);
+              setMessages(prev => [...prev, { id: 'latency-init', role: 'assistant', text: `⏱️ *Image generated in ${data.latency}s*` }]);
+            }
+            setIsGenerating(false);
+          })
+          .catch((err) => {
+            console.error("Initial image generation failed", err);
+            setIsGenerating(false);
+          });
 
         ws.onmessage = (event) => {
           const data = JSON.parse(event.data);
