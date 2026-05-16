@@ -18,6 +18,26 @@ const ai = new GoogleGenAI({
   }
 });
 
+const systemInstructionText = `
+# Role & Persona
+You are a cinematic storyteller spinning a continuous, magical narrative inspired by the whimsical, expressive art style of Studio Ghibli. The user co-creates this world with you via voice or text. Your tone is poetic, warm, and engaging.
+
+# Interaction Flow & Constraints
+* **Vocal Brevity:** Keep your spoken/text responses concise yet narrative (1–2 sentences max). Weave the user's input directly into the story.
+* **The Image Loop:** Upon receiving any user input, you MUST immediately call the \`generate_scenery_image\` tool to visually render the new scene.
+* **Silent Prompts:** NEVER read the image prompt out loud. Use your voice exclusively for the narrative story. Keep the tool call prompt entirely hidden and silent.
+* **Branching Paths:** Every 2–3 turns, conclude your brief narrative by offering exactly two distinct, imaginative options to guide the next phase of the story.
+
+# Step 1: The Awakening (First Turn)
+Your very first response must initialize the story. 
+1. Ask the user to define the core element: *"Who is our story about, or where does it begin?"*
+2. Provide two evocative starting options to inspire them.
+3. Call \`generate_scenery_image\` to establish the opening, atmospheric backdrop based on this initial prompt.
+# Critical Guardrails
+* **Interruption Handling:** If the user interrupts you or shifts focus mid-story, adapt instantly to their new input. You must immediately call \`generate_scenery_image\` to reflect the interrupted context.
+* **Safety & Tone:** Do not generate harmful, dark, or explicit images/stories. If the user steers toward negative or prohibited themes, do not break character or give a robotic refusal. Smoothly and poetically redirect the narrative back to a safe, wondrous, and positive Ghibli-esque tone.
+`;
+
 async function generateScenery(prompt: string) {
   const startTime = Date.now();
   const enhancedPrompt = `A beautiful, peaceful studio ghibli style anime landscape. ${prompt}. Masterpiece, highly detailed.`;
@@ -41,6 +61,105 @@ async function generateScenery(prompt: string) {
   };
 }
 
+async function handleLiveMessage(message: LiveServerMessage, clientWs: WebSocket, session: any) {
+  // Forward audio to client
+  const audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+  if (audio) {
+    clientWs.send(JSON.stringify({ type: 'audio', audio }));
+  }
+
+  // Forward interruption
+  if (message.serverContent?.interrupted) {
+    clientWs.send(JSON.stringify({ type: 'interrupted', interrupted: true }));
+  }
+
+  // Forward transcriptions based on input/output transcription config
+  const inputTranscription = (message.serverContent as any)?.inputTranscription;
+  if (inputTranscription?.text) {
+    clientWs.send(JSON.stringify({ type: 'transcription', source: 'user', text: inputTranscription.text }));
+  }
+
+  const outputTranscription = (message.serverContent as any)?.outputTranscription;
+  if (outputTranscription?.text) {
+    clientWs.send(JSON.stringify({ type: 'transcription', source: 'model', text: outputTranscription.text }));
+  }
+
+  // Fallback for model text if outputTranscription is not used
+  const modelTurnParts = message.serverContent?.modelTurn?.parts;
+  if (modelTurnParts && !outputTranscription?.text) {
+    const textParts = modelTurnParts.filter((p: any) => !!p.text);
+    if (textParts.length > 0) {
+      const fullText = textParts.map((p: any) => p.text).join("");
+      clientWs.send(JSON.stringify({ type: 'transcription', source: 'model', text: fullText }));
+    }
+  }
+
+  // Handle tool calls
+  const toolCall = message.toolCall;
+  if (toolCall) {
+    for (const call of toolCall.functionCalls || []) {
+      if (call.name === 'generate_scenery_image') {
+        const args = call.args as Record<string, any>;
+        console.log("Generating illustration for prompt:", args.prompt);
+        clientWs.send(JSON.stringify({ type: 'system', message: 'Generating scenery...' }));
+
+        // Immediate non-blocking response back to Live model
+        try {
+          await session.sendToolResponse({
+            functionResponses: [{ id: call.id, name: call.name, response: { success: true } }]
+          });
+        } catch (e) {
+          console.error("Failed to send immediate tool response:", e);
+        }
+
+        // Async generation in the background
+        (async () => {
+          try {
+            const { imageUrl, latency } = await generateScenery(args.prompt);
+            clientWs.send(JSON.stringify({ type: 'illustration', imageUrl, latency }));
+          } catch (e) {
+            console.error("Failed to generate image asynchronously:", e);
+          }
+        })();
+      }
+    }
+  }
+}
+
+function handleClientMessage(data: any, session: any) {
+  try {
+    const msg = JSON.parse(data.toString());
+    if (msg.audio) {
+      session.sendRealtimeInput({
+        audio: { data: msg.audio, mimeType: "audio/pcm;rate=16000" },
+      });
+    }
+    if (msg.text) {
+      session.sendRealtimeInput({ text: msg.text });
+    }
+    if (msg.command === "stop") {
+      session.sendClientContent({ turnComplete: true });
+    }
+    if (msg.image) {
+      const base64Data = msg.image.replace(/^data:image\/\w+;base64,/, "");
+      session.sendClientContent({
+        turns: [
+          {
+            role: "user",
+            parts: [
+              { text: msg.imageText || "I've uploaded an image. Please incorporate its core visual themes or any characters into our Ghibli scenery." },
+              { inlineData: { data: base64Data, mimeType: 'image/jpeg' } }
+            ]
+          }
+        ],
+        turnComplete: true
+      });
+    }
+  } catch (e) {
+    console.error("Error processing client message", e);
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -48,28 +167,8 @@ async function startServer() {
   const server = http.createServer(app);
   const wss = new WebSocketServer({ server, path: '/live' });
 
-  wss.on("connection", async (clientWs: WebSocket, req) => {
+  wss.on("connection", async (clientWs: WebSocket) => {
     console.log("Starting Live session");
-
-    const systemInstructionText = `
-# Role & Persona
-You are a cinematic storyteller spinning a continuous, magical narrative inspired by the whimsical, expressive art style of Studio Ghibli. The user co-creates this world with you via voice or text. Your tone is poetic, warm, and deeply atmospheric.
-
-# Interaction Flow & Constraints
-* **Vocal Brevity:** Keep your spoken/text responses extremely brief (1–2 sentences max). Weave the user's input directly into the unfolding lore of the world.
-* **The Image Loop:** Every single time the user speaks, provides an element, or changes direction, you MUST immediately call the \`generate_scenery_image\` tool to visually render the new scene.
-* **Branching Paths:** Every 2–3 turns, conclude your brief narrative by offering exactly two distinct, imaginative options to guide the next phase of the story.
-
-# Step 1: The Awakening (First Turn)
-Your very first response must initialize the story. 
-1. Ask the user to define the core element: *"Who is our story about, or where does it begin?"*
-2. Provide two evocative starting options to inspire them.
-3. Call \`generate_scenery_image\` to establish the opening, atmospheric backdrop based on this initial prompt.
-# Critical Guardrails
-* **Interruption Handling:** If the user interrupts you or shifts focus mid-story, adapt instantly to their new input. You must immediately call \`generate_scenery_image\` to reflect the interrupted context.
-* **Safety & Tone:** Do not generate harmful, dark, or explicit images/stories. If the user steers toward negative or prohibited themes, do not break character or give a robotic refusal. Smoothly and poetically redirect the narrative back to a safe, wondrous, and positive Ghibli-esque tone.
-`;
-
 
     let session: any = null;
     let isConnected = false;
@@ -78,74 +177,7 @@ Your very first response must initialize the story.
       session = await ai.live.connect({
         model: "gemini-3.1-flash-live-preview",
         callbacks: {
-          onmessage: async (message: LiveServerMessage) => {
-            // Forward audio to client
-            const audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-            if (audio) {
-              clientWs.send(JSON.stringify({ type: 'audio', audio }));
-            }
-            // Forward interruption
-            if (message.serverContent?.interrupted) {
-              clientWs.send(JSON.stringify({ type: 'interrupted', interrupted: true }));
-            }
-            // Forward transcriptions based on input/output transcription config
-            const inputTranscription = (message.serverContent as any)?.inputTranscription;
-            if (inputTranscription?.text) {
-              clientWs.send(JSON.stringify({ type: 'transcription', source: 'user', text: inputTranscription.text }));
-            }
-
-            const outputTranscription = (message.serverContent as any)?.outputTranscription;
-            if (outputTranscription?.text) {
-              clientWs.send(JSON.stringify({ type: 'transcription', source: 'model', text: outputTranscription.text }));
-            }
-
-            // Fallback for model text if outputTranscription is not used
-            const modelTurnParts = message.serverContent?.modelTurn?.parts;
-            if (modelTurnParts && !outputTranscription?.text) {
-              const textParts = modelTurnParts.filter((p: any) => !!p.text);
-              if (textParts.length > 0) {
-                const fullText = textParts.map((p: any) => p.text).join("");
-                clientWs.send(JSON.stringify({ type: 'transcription', source: 'model', text: fullText }));
-              }
-            }
-
-            // Handle tool calls
-            const toolCall = message.toolCall;
-            if (toolCall) {
-              for (const call of toolCall.functionCalls || []) {
-                if (call.name === 'generate_scenery_image') {
-                  const args = call.args as Record<string, any>;
-                  console.log("Generating illustration for prompt:", args.prompt);
-                  clientWs.send(JSON.stringify({ type: 'system', message: 'Generating scenery...' }));
-
-                  // Immediate non-blocking response back to Live model
-                  try {
-                    await session.sendToolResponse({
-                      functionResponses: [
-                        {
-                          id: call.id,
-                          name: call.name,
-                          response: { success: true }
-                        }
-                      ]
-                    });
-                  } catch (e) {
-                    console.error("Failed to send immediate tool response:", e);
-                  }
-
-                  // Async generation in the background
-                  (async () => {
-                    try {
-                      const { imageUrl, latency } = await generateScenery(args.prompt);
-                      clientWs.send(JSON.stringify({ type: 'illustration', imageUrl, latency }));
-                    } catch (e) {
-                      console.error("Failed to generate image asynchronously:", e);
-                    }
-                  })();
-                }
-              }
-            }
-          },
+          onmessage: async (message: LiveServerMessage) => handleLiveMessage(message, clientWs, session),
         },
         config: {
           responseModalities: [Modality.AUDIO],
@@ -182,40 +214,8 @@ Your very first response must initialize the story.
     }
 
     clientWs.on("message", (data) => {
-      if (!isConnected || !session) return;
-      try {
-        const msg = JSON.parse(data.toString());
-        if (msg.audio) {
-          session.sendRealtimeInput({
-            audio: { data: msg.audio, mimeType: "audio/pcm;rate=16000" },
-          });
-        }
-        if (msg.text) {
-          session.sendRealtimeInput({
-            text: msg.text
-          })
-        }
-        if (msg.command === "stop") {
-          session.sendClientContent({ turnComplete: true });
-        }
-        if (msg.image) {
-          // Wait, if we send an image directly via clientContent
-          const base64Data = msg.image.replace(/^data:image\/\w+;base64,/, "");
-          session.sendClientContent({
-            turns: [
-              {
-                role: "user",
-                parts: [
-                  { text: msg.imageText || "I've uploaded an image. Please incorporate its core visual themes or any characters into our Ghibli scenery." },
-                  { inlineData: { data: base64Data, mimeType: 'image/jpeg' } }
-                ]
-              }
-            ],
-            turnComplete: true
-          });
-        }
-      } catch (e) {
-        console.error("Error processing client message", e);
+      if (isConnected && session) {
+        handleClientMessage(data, session);
       }
     });
 
