@@ -83,7 +83,7 @@ export default function App() {
             player.stopAllAndClear();
             setMessages(prev => {
               const last = prev[prev.length - 1];
-              if (last && last.role === 'assistant') {
+              if (last && last.role === 'assistant' && last.id.startsWith('live-model')) {
                 return [...prev.slice(0, -1), { ...last, text: last.text + ' ...', isInterrupted: true }];
               }
               return prev;
