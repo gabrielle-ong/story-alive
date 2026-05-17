@@ -1,5 +1,5 @@
 {
-  "name": "EchoTales",
+  "name": "Story-Alive",
   "description": "Real-Time Collaborative CYOA Storyteller using Gemini Multimodal Live API and Imagen 3",
   "requestFramePermissions": [
     "microphone"
