@@ -2,6 +2,9 @@
 
 StoryAlive is a real-time, multimodal storytelling application that weaves a dynamic, magical narrative inspired by the whimsical art style of Studio Ghibli. It leverages Google's Gemini Developer SDK to create a highly immersive, low-latency conversational experience where the world visually evolves as you interact with it.
 
+## Demo Video
+https://cap.so/s/wfq0x44fxc5n086
+
 ## ✨ Core Features
 
 * **Real-Time Voice Conversation:** Speak naturally with the AI storyteller. The application supports full-duplex audio, meaning you can interrupt the story at any time to change its direction and the AI will adapt instantly.
@@ -41,3 +44,6 @@ During development, several architectural decisions were made to prioritize real
 3. Run `npm install` to install dependencies.
 4. Run `npm run dev` to boot up the Express backend and Vite frontend.
 5. Navigate to the local port, grant microphone permissions, and start building your world!
+
+## Initial AI Studio App (Image Generation without Live API)
+https://aistudio.google.com/u/1/apps/1f79a53d-4d15-449e-a0bf-d5225404479c?showAssistant=true&project=gen-lang-client-0171436551&showPreview=true
