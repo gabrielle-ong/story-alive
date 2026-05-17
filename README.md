@@ -3,6 +3,10 @@
 StoryAlive is a real-time, multimodal storytelling application that weaves a dynamic, magical narrative inspired by the whimsical art style of Studio Ghibli. It leverages Google's Gemini Developer SDK to create a highly immersive, low-latency conversational experience where the world visually evolves as you interact with it.
 
 ## Demo Video
+Fun live demo with users! 
+https://photos.app.goo.gl/JFFZ3pTCpSKCtm548
+
+Humble Jet lagged Demo in the airport 
 https://cap.so/s/wfq0x44fxc5n086
 
 ## ✨ Core Features
